@@ -1,0 +1,49 @@
+# Drop into .github/workflows/ of YOUR FORK of Kazoo512/goo-engine-metal, on the
+# metal-port-v4.4.3 branch (or whatever branch you forked/pushed).
+# Free for public repos; on private repos macOS minutes are billed at a 10x multiplier.
+name: Build macOS Metal port
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14          # Apple Silicon (M1)
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          lfs: false            # avoid GitHub's exhausted LFS quota on this repo/fork
+
+      - name: Tools
+        run: brew install ninja ccache git-lfs || true
+
+      - name: Point LFS at Blender's own server (not GitHub's)
+        run: git config lfs.url "https://projects.blender.org/blender/blender.git/info/lfs"
+
+      - name: Pull LFS assets (best-effort)
+        run: git lfs pull || echo "Some LFS assets unavailable; not required to build."
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ccache
+          key: ccache-macos14-${{ github.sha }}
+          restore-keys: ccache-macos14-
+
+      - name: Fetch libraries and assets
+        run: python3 build_files/utils/make_update.py --no-blender
+
+      - name: Build
+        run: make
+
+      - name: Package
+        run: |
+          cd ../build_darwin/bin
+          ditto -c -k --keepParent Blender.app "$GITHUB_WORKSPACE/GooEngine-Metal-macos-arm64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GooEngine-Metal-macos-arm64
+          path: GooEngine-Metal-macos-arm64.zip
